@@ -10,6 +10,7 @@ use Sign::StringFile;
 use Sign::MessageUtil qw(mode fancylines lines string flash_text show_time show_day_of_week show_date);
 use AnyEvent;
 use AnyEvent::HTTPD;
+use Device::SerialPort;
 
 our %alert_status = ();
 
@@ -21,7 +22,15 @@ my @fhs = ();
 die "You didn't give me any serial ports!\n" unless @serial_devices;
 
 foreach my $fn (@serial_devices) {
-    sysopen(my $fh, $fn, O_RDWR) || die "Can't open serial port $fn: $!";
+    my $port = Device::SerialPort->new($fn);
+    if ($port) {
+	$port->baudrate(9600) || die "Failed to set the baud rate on $fn\n";
+	$port->close();
+    }
+    else {
+	die "Failed to open the serial port $fn to set the baud rate\n";
+    }
+    sysopen(my $fh, $fn, O_RDWR) || die "Can't open serial port $fn: $!\n";
     push @signs, Sign->new($fh);
     push @fhs, $fh;
 }
