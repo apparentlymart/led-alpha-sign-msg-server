@@ -1,0 +1,51 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+use LWP::UserAgent;
+use Data::Dumper;
+
+my %headers = ();
+
+my $last_key;
+while (my $l = <STDIN>) {
+    chomp $l;
+    last if $l eq '';
+
+    if ($l =~ /^ /) {
+        $l =~ s/^\s+//;
+        $headers{$last_key} .= " " . $l;
+    }
+    else {
+        my ($key, $value) = split(/\s*:\s*/, $l);
+        $last_key = $key;
+        $headers{$key} = $value;
+    }
+}
+
+my $subject = $headers{Subject};
+my $to = $headers{To};
+
+my $unstable = ($subject =~ m!(unstable|failed)! ? 1 : 0);
+
+my $project;
+if ($to =~ m!<notify\+([A-Z_]+)!) {
+    $project = $1;
+    $project =~ y!_! !;
+}
+else {
+    # Not interesting without a project name to show
+    exit(0);
+}
+
+exit(0) unless $subject && $to;
+
+print "$project is ".($unstable ? "unstable" : "stable")."\n";
+
+my $message = "$project FAIL";
+
+my $ua = LWP::UserAgent->new();
+my $url = "http://127.0.0.1:8081/";
+$ua->post($url, { active => $unstable, message => $message });
+
+
