@@ -8,36 +8,46 @@ use Sign;
 use Sign::TextFile;
 use Sign::StringFile;
 use Sign::MessageUtil qw(mode fancylines lines string flash_text show_time show_day_of_week show_date);
-use XML::XPath;
-use XML::XPath::Node;
 use AnyEvent;
 use AnyEvent::HTTPD;
 
 our %alert_status = ();
 
-my $serial_device = "/dev/ttyS0";
+my @serial_devices = @ARGV;
 my $http_port = 8081;
+my @signs = ();
+my @fhs = ();
 
-sysopen(my $fh, $serial_device, O_RDWR) || die "Can't open serial port: $!";
+die "You didn't give me any serial ports!\n" unless @serial_devices;
 
-my $sign = Sign->new($fh);
-bootstrap_sign();
+foreach my $fn (@serial_devices) {
+    sysopen(my $fh, $fn, O_RDWR) || die "Can't open serial port $fn: $!";
+    push @signs, Sign->new($fh);
+    push @fhs, $fh;
+}
+
+bootstrap_signs();
 
 run_service($http_port);
 
-close($fh);
+for my $fh (@fhs) {
+    close($fh);
+}
 
-sub bootstrap_sign {
+sub bootstrap_signs {
 
-    $sign->sync_time();
+    foreach my $sign (@signs) {
 
-    my %files = ();
+	$sign->sync_time();
 
-    $sign->configure_files(
-        'A' => Sign::TextFile->new(mode("HOLD")),
-    );
+	my %files = ();
 
-    $sign->clear_priority_text_file_text();
+	$sign->configure_files(
+	    'A' => Sign::TextFile->new(mode("HOLD")),
+	);
+
+	$sign->clear_priority_text_file_text();
+    }
 
 }
 
@@ -46,10 +56,14 @@ sub update_priority_message {
     my @alerts_to_show = sort keys %alert_status;
 
     if (@alerts_to_show) {
-        $sign->set_priority_text_file_text(mode("HOLD"), lines(map { flash_text($_) } @alerts_to_show));
+	foreach my $sign (@signs) {
+	    $sign->set_priority_text_file_text(mode("HOLD"), lines(map { flash_text($_) } @alerts_to_show));
+	}
     }
     else {
-        $sign->clear_priority_text_file_text();
+	foreach my $sign (@signs) {
+	    $sign->clear_priority_text_file_text();
+	}
     }
 
 }
