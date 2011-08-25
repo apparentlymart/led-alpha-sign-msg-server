@@ -45,7 +45,9 @@ print "$project is ".($unstable ? "unstable" : "stable")."\n";
 my $message = "$project FAIL";
 
 my $ua = LWP::UserAgent->new();
-my $url = "http://127.0.0.1:8081/";
-$ua->post($url, { active => $unstable, message => $message });
+foreach my $url ("http://sfo-ss-hachi.say:8081/") {
+    $ua->post($url, { active => $unstable, message => $message });
+}
+
 
 
