@@ -1,0 +1,118 @@
+#!/usr/bin/perl
+
+=head1 NAME
+
+make-debian-dist - Build a .deb package of the current version
+
+=head1 SYNOPSIS
+
+    make-debian-dist <options>
+    
+    Options:
+        --quiet           Suppress information output.
+    
+        --debug           Enable debugging output.
+    
+        --force-weird-tag Allow build when we're not on an
+                          appropriately-named tag.
+    
+        --force-version=... Use exactly the provided version
+                          and don't try to detect a git tag.
+                          (implies --force-weird-tag)
+
+=cut
+
+BEGIN {
+    # Unless we're running as root, re-run
+    # in fakeroot so the file ownership in
+    # the generated package is sensible.
+    unless ($< eq 0) {
+        exec("fakeroot", "$0", @ARGV) && die "Either run this thing as root or install fakeroot.\n";
+    }
+}
+
+use strict;
+use warnings;
+
+use FindBin;
+use File::Temp;
+use Getopt::Long;
+use Pod::Usage;
+use File::Path ("mkpath");
+
+my $quiet = 0;
+my $debug = 0;
+
+Getopt::Long::GetOptions(
+    quiet => \$quiet,
+    debug => \$debug,
+) || pod2usage(2);
+
+sub info;
+sub debug;
+
+my $base_dir = $FindBin::Bin;
+my $res_dir = "$base_dir/debian-dist";
+chdir "$base_dir/.." || die "Failed to chdir into the repo root: $!\n";
+
+my $version;
+{
+    my $current_commit_info = `git log -1 --pretty=format:%ct%n%h%n%H`;
+    die "Unable to determine current version" if $?;
+    my ($ts, $abbrev, $full) = split(/\n/, $current_commit_info);
+    my ($sec, $min, $hour, $mday, $mon, $year) = gmtime($ts);
+    $version = sprintf("%04d-%02d-%02d-%02d%02d%02d-%s", $year + 1900, $mon + 1, $mday, $hour, $min, $sec, $abbrev);
+}
+
+info "Building $version";
+
+my $work_dir = File::Temp::tempdir(CLEANUP => 1) || die "Failed to get a temporary work directory: $!\n";
+
+debug "Working in $work_dir";
+
+my $install_root = "$work_dir/opt/led-alpha-sign-msg-server";
+mkpath($install_root) || die "Failed to create $install_root: $!\n";
+
+mkdir("$work_dir/DEBIAN");
+open(CONTROLSRC, '<', "$base_dir/debian-dist/control") || die "Failed to open the template debian control file: $!\n";
+open(CONTROL, '>', "$work_dir/DEBIAN/control");
+while (my $l = <CONTROLSRC>) {
+    $l =~ s!%%VERSION%%!$version!g;
+    print CONTROL $l;
+}
+close(CONTROLSRC);
+close(CONTROL);
+
+## Copy in the source files
+mkpath "$install_root/bin";
+mkpath "$install_root/lib";
+system('cp', 'signserver.pl', 'addmessage.pl', "$install_root/bin") && die "Failed to copy scripts into the work dir";
+system('cp', '-r', 'Sign.pm', 'Sign/', "$install_root/lib") && die "Failed to copy perl libs into the work dir";
+
+# Fix the permissions on the scripts
+foreach my $f (glob("$install_root/bin/*")) {
+    chmod 0755, $f;
+}
+
+mkdir("dist") || die "Failed to make 'dist'\n" unless -d "dist";
+mkdir("dist/debian") || die "Failed to make 'dist/debian'\n" unless -d "dist/debian";
+
+system("dpkg", "--build", $work_dir, "dist/debian");
+
+my @packages = glob("dist/debian/led-alpha-sign-msg-server_${version}*.deb");
+info "";
+info "Your binary package is $packages[0]\n";
+
+END {
+    if (defined($base_dir) && -l "$base_dir/../debian") {
+        unlink("$base_dir/../debian");
+    }
+}
+
+sub info {
+    print @_, "\n" unless $quiet;
+}
+
+sub debug {
+    print @_, "\n" if $debug;
+}

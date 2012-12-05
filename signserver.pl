@@ -4,6 +4,7 @@ use strict;
 use warnings;
 use Fcntl;
 use Data::Dumper;
+use lib "/opt/led-alpha-sign-msg-server/lib";
 use Sign;
 use Sign::TextFile;
 use Sign::StringFile;
