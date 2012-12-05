@@ -3,7 +3,7 @@ Version: %%VERSION%%
 Section: web
 Priority: extra
 Architecture: all
-Depends: perl, libanyevent-perl, libanyevent-httpd-perl, libdevice-serialport-perl
+Depends: perl, libanyevent-perl, libanyevent-httpd-perl, libdevice-serialport-perl, liburi-perl
 Maintainer: Martin Atkins <mart@degeneration.co.uk>
 Description: Simple daemon to show messages on Alpha LED Signs
   Provides an HTTP-based interface to add and remove messages from Alpha
